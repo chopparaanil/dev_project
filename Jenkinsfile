@@ -15,93 +15,58 @@ pipeline {
             }
         }
 
-        stage('Print Workspace') {
-            steps {
-                sh 'pwd'
-                sh 'ls -la'
-            }
-        }
-
         stage('Docker Version') {
             steps {
                 sh 'docker --version'
-                sh 'docker compose version'
             }
         }
 
         stage('Build Image') {
             steps {
                 sh '''
-                docker build \
-                -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
                 '''
             }
         }
 
-        stage('Docker Images') {
-            steps {
-                sh 'docker images'
-            }
-        }
-
-        stage('Stop Existing Containers') {
+        stage('Remove Old Container') {
             steps {
                 sh '''
-                docker compose down || true
+                docker stop student-app || true
+                docker rm student-app || true
                 '''
             }
         }
 
-        stage('Deploy') {
+        stage('Run Container') {
             steps {
                 sh '''
-                docker compose up -d --build
+                docker run -d \
+                    --name student-app \
+                    -p 5020:5020 \
+                    student-app:latest
                 '''
             }
         }
 
-        stage('Verify Containers') {
-            steps {
-                sh 'docker ps'
-            }
-        }
-
-        stage('Health Check') {
+        stage('Verify') {
             steps {
                 sh '''
-                sleep 15
-                curl -I http://localhost:8080
+                docker ps
                 '''
             }
         }
+
     }
 
     post {
 
         success {
-
-            echo '==================================='
-            echo 'Build Successful'
-            echo 'Application Deployed Successfully'
-            echo '==================================='
-
+            echo 'Deployment Successful'
         }
 
         failure {
-
-            echo '==================================='
-            echo 'Build Failed'
-            echo 'Check Console Output'
-            echo '==================================='
-
+            echo 'Deployment Failed'
         }
-
-        always {
-
-            sh 'docker images'
-
-        }
-
     }
-
 }
