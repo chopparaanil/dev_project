@@ -28,10 +28,27 @@ pipeline {
             }
         }
 
-        stage('Run Docker Compose') {
+        stage('Docker Images') {
             steps {
+                sh 'docker images'
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh 'docker compose down || true'
                 sh 'docker compose up -d'
             }
+        }
+    }
+
+    post {
+        success {
+            echo 'Deployment Successful'
+        }
+
+        failure {
+            echo 'Pipeline Failed'
         }
     }
 }
