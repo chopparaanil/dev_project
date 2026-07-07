@@ -3,10 +3,10 @@ pipeline {
     agent any
 
     environment {
+        DOCKER_USERNAME = "anilchoppara"
         IMAGE_NAME = "student-app"
+        IMAGE = "${DOCKER_USERNAME}/${IMAGE_NAME}"
         IMAGE_TAG = "${BUILD_NUMBER}"
-        CONTAINER_NAME = "student-app"
-        APP_PORT = "5020"
     }
 
     options {
@@ -15,156 +15,105 @@ pipeline {
 
     stages {
 
-        stage('Checkout Source') {
+        stage('Checkout') {
             steps {
-                echo "Checking out source code..."
                 checkout scm
             }
         }
 
-        stage('Workspace Information') {
+        stage('Python Checks') {
             steps {
                 sh '''
-                echo "Current Directory:"
-                pwd
-
-                echo "Workspace Files:"
-                ls -la
-                '''
-            }
-        }
-
-        stage('Python Version') {
-            steps {
-                sh '''
-                python3 --version
-                '''
-            }
-        }
-
-        stage('Install Python Dependencies') {
-            steps {
-                sh '''
-                python3 -m pip install --upgrade pip
-                pip3 install -r requirements.txt
-                '''
-            }
-        }
-
-        stage('Code Quality') {
-            steps {
-                sh '''
-                flake8 . || true
-                '''
-            }
-        }
-
-        stage('Unit Tests') {
-            steps {
-                sh '''
-                pytest -v || true
-                '''
-            }
-        }
-
-        stage('Docker Version') {
-            steps {
-                sh '''
-                docker --version
+                docker run --rm \
+                    -v $WORKSPACE:/app \
+                    -w /app \
+                    python:3.12-slim \
+                    sh -c "
+                        pip install --no-cache-dir -r requirements.txt &&
+                        pip install flake8 pytest &&
+                        flake8 . &&
+                        pytest
+                    "
                 '''
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh """
+                sh '''
                 docker build \
-                    -t ${IMAGE_NAME}:${IMAGE_TAG} \
-                    -t ${IMAGE_NAME}:latest \
-                    .
-                """
-            }
-        }
-
-        stage('Docker Images') {
-            steps {
-                sh '''
-                docker images
+                  -t $IMAGE:$IMAGE_TAG \
+                  -t $IMAGE:latest .
                 '''
             }
         }
 
-        stage('Remove Old Container') {
+        stage('Docker Login') {
             steps {
-                sh """
-                docker stop ${CONTAINER_NAME} || true
-                docker rm ${CONTAINER_NAME} || true
-                """
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'USERNAME',
+                        passwordVariable: 'PASSWORD'
+                    )
+                ]) {
+                    sh '''
+                    echo "$PASSWORD" | docker login -u "$USERNAME" --password-stdin
+                    '''
+                }
             }
         }
 
-        stage('Run Container') {
-            steps {
-                sh """
-                docker run -d \
-                    --name ${CONTAINER_NAME} \
-                    -p ${APP_PORT}:${APP_PORT} \
-                    ${IMAGE_NAME}:latest
-                """
-            }
-        }
-
-        stage('Verify Deployment') {
+        stage('Push Image') {
             steps {
                 sh '''
-                echo "Running Containers:"
-                docker ps
-
-                echo ""
-                echo "Docker Images:"
-                docker images
+                docker push $IMAGE:$IMAGE_TAG
+                docker push $IMAGE:latest
                 '''
             }
         }
 
-        stage('Health Check') {
+        stage('Deploy to Kubernetes') {
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh '''
+                    kubectl set image deployment/student-app \
+                    student-app=$IMAGE:$IMAGE_TAG
+
+                    kubectl rollout status deployment/student-app
+                    '''
+                }
+            }
+        }
+
+        stage('Verify') {
             steps {
                 sh '''
-                sleep 10
-
-                curl -I http://localhost:5020 || true
+                kubectl get pods
+                kubectl get svc
                 '''
             }
         }
+
     }
 
     post {
 
-        always {
-
-            echo "Cleaning dangling images..."
-
-            sh '''
-            docker image prune -f || true
-            '''
-        }
-
         success {
-
-            echo "======================================"
-            echo "BUILD SUCCESSFUL"
-            echo "Application deployed successfully."
-            echo "======================================"
-
+            echo "Deployment Successful"
         }
 
         failure {
-
-            echo "======================================"
-            echo "BUILD FAILED"
-            echo "Check Jenkins Console Output."
-            echo "======================================"
-
+            echo "Deployment Failed"
         }
+
+        always {
+            sh '''
+            docker image prune -f || true
+            docker logout || true
+            '''
+        }
+
     }
+
 }
