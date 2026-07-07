@@ -1,5 +1,11 @@
 pipeline {
+
     agent any
+
+    environment {
+        IMAGE_NAME = "student-app"
+        IMAGE_TAG = "latest"
+    }
 
     stages {
 
@@ -19,12 +25,16 @@ pipeline {
         stage('Docker Version') {
             steps {
                 sh 'docker --version'
+                sh 'docker compose version'
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build Image') {
             steps {
-                sh 'docker build -t student-app:latest .'
+                sh '''
+                docker build \
+                -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                '''
             }
         }
 
@@ -34,21 +44,64 @@ pipeline {
             }
         }
 
+        stage('Stop Existing Containers') {
+            steps {
+                sh '''
+                docker compose down || true
+                '''
+            }
+        }
+
         stage('Deploy') {
             steps {
-                sh 'docker compose down || true'
-                sh 'docker compose up -d'
+                sh '''
+                docker compose up -d --build
+                '''
+            }
+        }
+
+        stage('Verify Containers') {
+            steps {
+                sh 'docker ps'
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                sh '''
+                sleep 15
+                curl -I http://localhost:8080
+                '''
             }
         }
     }
 
     post {
+
         success {
-            echo 'Deployment Successful'
+
+            echo '==================================='
+            echo 'Build Successful'
+            echo 'Application Deployed Successfully'
+            echo '==================================='
+
         }
 
         failure {
-            echo 'Pipeline Failed'
+
+            echo '==================================='
+            echo 'Build Failed'
+            echo 'Check Console Output'
+            echo '==================================='
+
         }
+
+        always {
+
+            sh 'docker images'
+
+        }
+
     }
+
 }
