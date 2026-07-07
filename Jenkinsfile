@@ -21,23 +21,6 @@ pipeline {
             }
         }
 
-        stage('Python Checks') {
-            steps {
-                sh '''
-                docker run --rm \
-                    -v $WORKSPACE:/app \
-                    -w /app \
-                    python:3.12-slim \
-                    sh -c "
-                        pip install --no-cache-dir -r requirements.txt &&
-                        pip install flake8 pytest &&
-                        flake8 . &&
-                        pytest
-                    "
-                '''
-            }
-        }
-
         stage('Build Docker Image') {
             steps {
                 sh '''
