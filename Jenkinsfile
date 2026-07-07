@@ -3,11 +3,10 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_USERNAME = "anilchoppara"
-        IMAGE_NAME = "student-app"
-        IMAGE = "${DOCKER_USERNAME}/${IMAGE_NAME}"
-        IMAGE_TAG = "${BUILD_NUMBER}"
-    }
+    IMAGE_NAME = "anilchoppara/student-app"
+    IMAGE_TAG = "${BUILD_NUMBER}"
+    KUBECONFIG = "/var/jenkins_home/.kube/config"
+}
 
     options {
         timestamps()
@@ -25,8 +24,8 @@ pipeline {
             steps {
                 sh '''
                 docker build \
-                  -t $IMAGE:$IMAGE_TAG \
-                  -t $IMAGE:latest .
+                    -t $IMAGE_NAME:$IMAGE_TAG \
+                    -t $IMAGE_NAME:latest .
                 '''
             }
         }
@@ -50,22 +49,22 @@ pipeline {
         stage('Push Image') {
             steps {
                 sh '''
-                docker push $IMAGE:$IMAGE_TAG
-                docker push $IMAGE:latest
+                docker push $IMAGE_NAME:$IMAGE_TAG
+                docker push $IMAGE_NAME:latest
                 '''
             }
         }
 
         stage('Deploy to Kubernetes') {
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-                    sh '''
-                    kubectl set image deployment/student-app \
-                    student-app=$IMAGE:$IMAGE_TAG
+                sh '''
+                kubectl get nodes
 
-                    kubectl rollout status deployment/student-app
-                    '''
-                }
+                kubectl set image deployment/student-app \
+                student-app=$IMAGE_NAME:$IMAGE_TAG
+
+                kubectl rollout status deployment/student-app
+                '''
             }
         }
 
