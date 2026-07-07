@@ -4,10 +4,9 @@ USER root
 
 RUN apt-get update && \
     apt-get install -y \
-        curl \
-        git \
-        docker.io \
-        docker-compose-plugin && \
-    apt-get clean
+    python3 \
+    python3-pip \
+    git \
+    curl
 
 USER jenkins
