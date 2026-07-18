@@ -1,3 +1,7 @@
 helooo anil
 
+<<<<<<< HEAD
 pull testing
+=======
+
+>>>>>>> origin/main
